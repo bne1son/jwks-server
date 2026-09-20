@@ -1,8 +1,11 @@
+mod key;
+
 use std::{
     net::{TcpStream, TcpListener},
     io::{BufReader, prelude::*}
 };
 use serde::Serialize;
+use key::Key;
 
 #[derive(Serialize)]
 struct Jwks {
@@ -21,25 +24,30 @@ struct Jwk {
 }
 
 fn main() {
+    let key = Key::new(
+        "test-key".to_string(),
+        1234567890,
+    );
+
     let socket = TcpListener::bind("127.0.0.1:8080");
     for stream in socket.unwrap().incoming() {
         let stream = stream.unwrap();
-        handle_connection(stream);
+        handle_connection(stream, &key);
     }
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, key: &Key) {
     let http_request = get_http_request(&stream);
     if http_request[0].starts_with("GET /.well-known/jwks.json") {
         println!("JWKS endpoint");
 
         let jwk = Jwk {
             kty: "RSA".to_string(),
-            kid: "test-key".to_string(),
+            kid: key.kid().to_string(),
             use_: "sig".to_string(),
             alg: "RS256".to_string(),
-            n: "fake-modulus".to_string(),
-            e: "AQAB".to_string(),
+            n: key.modulus(),
+            e: key.exponent(),
         };
         let jwks = Jwks {
             keys: vec![jwk],
