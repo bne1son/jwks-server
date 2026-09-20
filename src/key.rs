@@ -2,15 +2,20 @@ use rand::thread_rng;
 use rsa::{
     RsaPrivateKey,
     RsaPublicKey,
-    traits::PublicKeyParts
+    traits::PublicKeyParts,
+    pkcs1v15::SigningKey,
+    signature::{
+        RandomizedSigner,
+        SignatureEncoding,
+        Verifier
+    },
 };
 use base64::{
     engine::general_purpose::URL_SAFE_NO_PAD,
     Engine,
 };
-use rsa::pkcs1v15::SigningKey;
 use sha2::Sha256;
-use rsa::signature::{RandomizedSigner, SignatureEncoding, Signer};
+
 
 pub struct Key {
     kid: String,
@@ -50,5 +55,9 @@ impl Key {
             return true;
         }
         return false
+    }
+
+    pub fn expires_at(&self) -> u64 {
+        return self.expires_at;
     }
 }
