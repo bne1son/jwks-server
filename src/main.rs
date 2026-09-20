@@ -17,8 +17,8 @@ use jose::{
 };
 
 fn main() {
-    // sample key which expires in half hour
-    let sample_key = Key::new(
+    // sample key which expires in a half hour
+    let sample_unexpired_key = Key::new(
         "active-key".to_string(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -26,10 +26,10 @@ fn main() {
             .as_secs() + 1800,
     );
 
-    // sample key which expired half hour ago
+    // sample key which expired a half hour ago
     let sample_expired_key = Key::new(
         "expired-key".to_string(),
-        sample_key.expires_at() - 3600
+        sample_unexpired_key.expires_at() - 3600
     );
 
     let socket = TcpListener::bind("127.0.0.1:8080");
@@ -38,22 +38,24 @@ fn main() {
         let stream = stream.unwrap();
         handle_connection(
             stream,
-            &sample_key,
+            &sample_unexpired_key,
             &sample_expired_key
         );
     }
 }
 
 pub fn handle_connection(mut stream: TcpStream, key: &Key, expired_key: &Key) {
-    // splits stream to give to endpoints
+    // splits stream to give get endpoints
     let http_request = get_http_request(&stream);
     let request_line: Vec<&str> = http_request[0]
         .split_whitespace()
         .collect();
     let method = request_line[0];
-    let (path, query) = match request_line[1].split_once('?') {
+    let (path, query) = {
+        match request_line[1].split_once('?') {
             Some((path, query)) => (path, Some(query)),
             None => (request_line[1], None)
+        }
     };
     // for expiration checking
     let now = SystemTime::now()
@@ -65,20 +67,21 @@ pub fn handle_connection(mut stream: TcpStream, key: &Key, expired_key: &Key) {
     match (method, path) {
         ("GET", "/.well-known/jwks.json") => {
             println!("JWKS endpoint hit");
-            let mut jwks_vec: Vec<Jwk> = Vec::new();
+            let mut jwk_set: Vec<Jwk> = Vec::new();
             // check expiration
             if !key.is_expired(now) {
                 let jwk = Jwk::from_key(key);
-                jwks_vec.push(jwk);
+                jwk_set.push(jwk);
             }
-            // create jwks from many jwk
-            let jwks = Jwks::new(jwks_vec);
+            // create JWK set from jwk
+            let jwks = Jwks::new(jwk_set);
+            // create http body response
             let body = serde_json::to_string(&jwks).unwrap();
             let response = format!(
                 "HTTP/1.1 200 OK\r\n\
-             Content-Type: application/json\r\n\
-             \r\n\
-             {}", body
+                 Content-Type: application/json\r\n\
+                 \r\n\
+                 {}", body
             );
             stream.write_all(response.as_bytes()).unwrap();
         }
@@ -147,16 +150,11 @@ pub fn get_http_request(stream: &TcpStream) -> Vec<String> {
 }
 
 
-//###################################//
-//              Tests                //
-//###################################//
+// tests for server related stuff
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        net::{TcpListener, TcpStream},
-        thread,
-    };
+    use std::thread;
 
     fn send_request(request: &str) -> String {
         let socket = TcpListener::bind("127.0.0.1:0").unwrap();

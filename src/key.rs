@@ -26,7 +26,9 @@ pub struct Key {
 impl Key {
     pub fn new(kid: String, expires_at: u64) -> Self {
         let mut rng = thread_rng();
+        // create random private key
         let private_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
+        // create public key based off the private key
         let public_key = RsaPublicKey::from(&private_key);
         Self {
             kid,
@@ -43,6 +45,7 @@ impl Key {
     }
 
     pub fn kid(&self) -> &str {&self.kid}
+
     pub fn modulus(&self) -> String {
         return URL_SAFE_NO_PAD.encode(self.public_key.n().to_bytes_be());
     }
@@ -61,14 +64,16 @@ impl Key {
     }
 }
 
+
+// tests for key related stuff
 #[test]
 fn unexpired_key_is_not_expired() {
-    let key = Key::new("test-key".to_string(), 100);
-    assert!(!key.is_expired(99));
+    let key = Key::new("test-key".to_string(), 2);
+    assert!(!key.is_expired(1));
 }
 
 #[test]
 fn expired_key_is_expired() {
-    let key = Key::new("test-key".to_string(), 100);
-    assert!(key.is_expired(101));
+    let key = Key::new("test-key".to_string(), 2);
+    assert!(key.is_expired(3));
 }

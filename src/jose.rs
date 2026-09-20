@@ -11,13 +11,14 @@ pub struct Jwk {
     kty: String,    // key type
     kid: String,    // key ID
     #[serde(rename = "use")]
-    use_: String,   // use (encryption)
+    use_: String,   // use (signature)
     alg: String,    // algorithm
     n: String,      // modulus
     e: String,      // exponent
 }
 
 impl Jwk {
+    // create a jwk based off the RSA key
     pub fn from_key(key: &Key) -> Self {
         Self {
             kty: "RSA".to_string(),
@@ -36,6 +37,7 @@ pub struct Jwks {
 }
 
 impl Jwks {
+    // create a jwk set
     pub fn new(keys: Vec<Jwk>) -> Self {
         Self {keys}
     }
@@ -49,16 +51,19 @@ struct JwtHeader {
 }
 
 pub fn jwt_create_header(key: &Key) -> String {
+    // create jwt header using RSA key's id
     let header = JwtHeader {
         alg: "RS256".to_string(),
         typ: "JWT".to_string(),
         kid: key.kid().to_string(),
     };
+    // json-ify the header
     return serde_json::to_string(&header).unwrap();
 }
 
 #[derive(Serialize)]
 struct JwtPayload {
+    // only claim is exponent
     exp: u64,
 }
 
@@ -66,6 +71,7 @@ pub fn jwt_create_payload(key: &Key) -> String {
     let payload = JwtPayload {
         exp: key.expires_at(),
     };
+    // json-ify the payload
     serde_json::to_string(&payload).unwrap()
 }
 
@@ -77,6 +83,8 @@ pub fn base64url_bytes(input: &[u8]) -> String {
     return URL_SAFE_NO_PAD.encode(input);
 }
 
+
+// tests for jose related stuff
 #[test]
 fn jwk_contains_key_information() {
     let key = Key::new("test-key".to_string(), 100);
