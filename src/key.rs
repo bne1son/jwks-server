@@ -7,7 +7,6 @@ use rsa::{
     signature::{
         RandomizedSigner,
         SignatureEncoding,
-        Verifier
     },
 };
 use base64::{
@@ -21,7 +20,7 @@ pub struct Key {
     kid: String,
     expires_at: u64,
     private_key: RsaPrivateKey,
-    public_key: RsaPublicKey,
+    pub public_key: RsaPublicKey,
 }
 
 impl Key {
@@ -51,7 +50,7 @@ impl Key {
         return URL_SAFE_NO_PAD.encode(self.public_key.e().to_bytes_be());
     }
     pub fn is_expired(&self, now: u64) -> bool {
-        if (now >= self.expires_at) {
+        if now >= self.expires_at {
             return true;
         }
         return false
@@ -60,4 +59,16 @@ impl Key {
     pub fn expires_at(&self) -> u64 {
         return self.expires_at;
     }
+}
+
+#[test]
+fn unexpired_key_is_not_expired() {
+    let key = Key::new("test-key".to_string(), 100);
+    assert!(!key.is_expired(99));
+}
+
+#[test]
+fn expired_key_is_expired() {
+    let key = Key::new("test-key".to_string(), 100);
+    assert!(key.is_expired(101));
 }
