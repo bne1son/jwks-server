@@ -2,7 +2,8 @@ mod key;
 
 use std::{
     net::{TcpStream, TcpListener},
-    io::{BufReader, prelude::*}
+    io::{BufReader, prelude::*},
+    time::{SystemTime, UNIX_EPOCH}
 };
 use serde::Serialize;
 use key::Key;
@@ -25,32 +26,46 @@ struct Jwk {
 
 fn main() {
     let key = Key::new(
-        "test-key".to_string(),
-        1234567890,
+        "active-key".to_string(),
+        2_000_000_000,
+    );
+
+    let expired_key = Key::new(
+        "expired-key".to_string(),
+        1_000_000_000,
     );
 
     let socket = TcpListener::bind("127.0.0.1:8080");
     for stream in socket.unwrap().incoming() {
         let stream = stream.unwrap();
-        handle_connection(stream, &key);
+        handle_connection(stream, &key, &expired_key);
     }
 }
 
-fn handle_connection(mut stream: TcpStream, key: &Key) {
+fn handle_connection(mut stream: TcpStream, key: &Key, expired_key: &Key) {
     let http_request = get_http_request(&stream);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    println!("Active expired: {}", key.is_expired(now));
+    println!("Expired expired: {}", expired_key.is_expired(now));
     if http_request[0].starts_with("GET /.well-known/jwks.json") {
         println!("JWKS endpoint");
-
-        let jwk = Jwk {
-            kty: "RSA".to_string(),
-            kid: key.kid().to_string(),
-            use_: "sig".to_string(),
-            alg: "RS256".to_string(),
-            n: key.modulus(),
-            e: key.exponent(),
-        };
+        let mut jwks: Vec<Jwk> = Vec::new();
+        if !key.is_expired(now) {
+            let jwk = Jwk {
+                kty: "RSA".to_string(),
+                kid: key.kid().to_string(),
+                use_: "sig".to_string(),
+                alg: "RS256".to_string(),
+                n: key.modulus(),
+                e: key.exponent(),
+            };
+            jwks.push(jwk);
+        }
         let jwks = Jwks {
-            keys: vec![jwk],
+            keys: jwks,
         };
 
         let body = serde_json::to_string(&jwks).unwrap();
@@ -72,6 +87,7 @@ fn handle_connection(mut stream: TcpStream, key: &Key) {
     }
 }
 
+// Returns a stringified http request
 fn get_http_request(stream: &TcpStream) -> Vec<String> {
     let reader = BufReader::new(stream);
     let http_request: Vec<String> = {
@@ -81,5 +97,5 @@ fn get_http_request(stream: &TcpStream) -> Vec<String> {
             .take_while(|line| !line.is_empty())
             .collect()
     };
-    http_request
+    return http_request;
 }

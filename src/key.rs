@@ -8,6 +8,9 @@ use base64::{
     engine::general_purpose::URL_SAFE_NO_PAD,
     Engine,
 };
+use rsa::pkcs1v15::SigningKey;
+use sha2::Sha256;
+use rsa::signature::{RandomizedSigner, SignatureEncoding, Signer};
 
 pub struct Key {
     kid: String,
@@ -28,14 +31,24 @@ impl Key {
             public_key,
         }
     }
-
-    pub fn kid(&self) -> &str {
-        &self.kid
+    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+        let mut rng = thread_rng();
+        let signing_key = SigningKey::<Sha256>::new(self.private_key.clone());
+        let signature = signing_key.sign_with_rng(&mut rng, message);
+        return signature.to_bytes().to_vec();
     }
+
+    pub fn kid(&self) -> &str {&self.kid}
     pub fn modulus(&self) -> String {
-        URL_SAFE_NO_PAD.encode(self.public_key.n().to_bytes_be())
+        return URL_SAFE_NO_PAD.encode(self.public_key.n().to_bytes_be());
     }
     pub fn exponent(&self) -> String {
-        URL_SAFE_NO_PAD.encode(self.public_key.e().to_bytes_be())
+        return URL_SAFE_NO_PAD.encode(self.public_key.e().to_bytes_be());
+    }
+    pub fn is_expired(&self, now: u64) -> bool {
+        if (now >= self.expires_at) {
+            return true;
+        }
+        return false
     }
 }
