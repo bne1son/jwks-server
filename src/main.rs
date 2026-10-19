@@ -1,5 +1,6 @@
 mod key;
 mod jose;
+mod db;
 
 use std::{
     net::{TcpStream, TcpListener},
@@ -17,6 +18,9 @@ use jose::{
 };
 
 fn main() {
+    let _database = db::init_db()
+        .expect("Failed to initialize database");
+
     // sample key which expires in a half hour
     let sample_unexpired_key = Key::new(
         "active-key".to_string(),

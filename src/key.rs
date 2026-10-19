@@ -3,6 +3,11 @@ use rsa::{
     RsaPrivateKey,
     RsaPublicKey,
     traits::PublicKeyParts,
+    pkcs1::{
+        EncodeRsaPrivateKey,
+        DecodeRsaPrivateKey,
+        LineEnding,
+    },
     pkcs1v15::SigningKey,
     signature::{
         RandomizedSigner,
@@ -62,8 +67,24 @@ impl Key {
     pub fn expires_at(&self) -> u64 {
         return self.expires_at;
     }
-}
+    pub fn private_to_pem(&self) -> String {
+        return self.private_key
+            .to_pkcs1_pem(LineEnding::LF)
+            .unwrap()
+            .to_string();
+    }
 
+    pub fn from_pem(kid: String, expires_at: u64, pem: &str) -> Self {
+        let private_key = RsaPrivateKey::from_pkcs1_pem(pem).unwrap();
+        let public_key = RsaPublicKey::from(&private_key);
+        return Self {
+            kid,
+            expires_at,
+            private_key,
+            public_key,
+        };
+    }
+}
 
 // tests for key related stuff
 #[test]

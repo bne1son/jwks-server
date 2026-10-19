@@ -63,7 +63,7 @@ pub fn jwt_create_header(key: &Key) -> String {
 
 #[derive(Serialize)]
 struct JwtPayload {
-    // only claim is exponent
+    // only claim is expiration
     exp: u64,
 }
 
