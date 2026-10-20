@@ -36,6 +36,11 @@ fn main() {
         sample_unexpired_key.expires_at() - 3600
     );
 
+    db::insert_key(&_database, &sample_unexpired_key)
+        .expect("Failed to insert unexpired key");
+    db::insert_key(&_database, &sample_expired_key)
+        .expect("Failed to insert expired key");
+    
     let socket = TcpListener::bind("127.0.0.1:8080");
     // listen on 127.0.0.1:8080
     for stream in socket.unwrap().incoming() {

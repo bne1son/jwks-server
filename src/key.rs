@@ -67,6 +67,7 @@ impl Key {
     pub fn expires_at(&self) -> u64 {
         return self.expires_at;
     }
+    
     pub fn private_to_pem(&self) -> String {
         return self.private_key
             .to_pkcs1_pem(LineEnding::LF)
