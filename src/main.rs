@@ -7,6 +7,8 @@ use std::{
     io::{BufReader, prelude::*},
     time::{SystemTime, UNIX_EPOCH}
 };
+use std::thread::current;
+use rusqlite::Connection;
 use key::Key;
 use jose::{
     Jwk,
@@ -21,26 +23,26 @@ fn main() {
     let _database = db::init_db()
         .expect("Failed to initialize database");
 
-    // sample key which expires in a half hour
+    // sample key which expires in an hour
     let sample_unexpired_key = Key::new(
         "active-key".to_string(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() + 1800,
+            .as_secs() + 3600,
     );
 
-    // sample key which expired a half hour ago
+    // sample key which expired an hour ago
     let sample_expired_key = Key::new(
         "expired-key".to_string(),
-        sample_unexpired_key.expires_at() - 3600
+        sample_unexpired_key.expires_at() - 7200
     );
 
     db::insert_key(&_database, &sample_unexpired_key)
         .expect("Failed to insert unexpired key");
     db::insert_key(&_database, &sample_expired_key)
         .expect("Failed to insert expired key");
-
+/**
                     let now = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
@@ -54,20 +56,19 @@ fn main() {
                         expired_loaded_key.kid(),
                         expired_loaded_key.expires_at()
                     );
-
+**/
     let socket = TcpListener::bind("127.0.0.1:8080");
     // listen on 127.0.0.1:8080
     for stream in socket.unwrap().incoming() {
         let stream = stream.unwrap();
         handle_connection(
             stream,
-            &sample_unexpired_key,
-            &sample_expired_key
+            &_database,
         );
     }
 }
 
-pub fn handle_connection(mut stream: TcpStream, key: &Key, expired_key: &Key) {
+pub fn handle_connection(mut stream: TcpStream, db: &Connection) {
     // splits stream to give get endpoints
     let http_request = get_http_request(&stream);
     let request_line: Vec<&str> = http_request[0]
@@ -90,10 +91,12 @@ pub fn handle_connection(mut stream: TcpStream, key: &Key, expired_key: &Key) {
     match (method, path) {
         ("GET", "/.well-known/jwks.json") => {
             println!("JWKS endpoint hit");
+            let valid_keys = db::get_valid_key_set(db, now)
+                .expect("Failed to retrieve valid keys");
             let mut jwk_set: Vec<Jwk> = Vec::new();
             // check expiration
-            if !key.is_expired(now) {
-                let jwk = Jwk::from_key(key);
+            for key in valid_keys {
+                let jwk = Jwk::from_key(&key);
                 jwk_set.push(jwk);
             }
             // create JWK set from jwk
@@ -109,16 +112,21 @@ pub fn handle_connection(mut stream: TcpStream, key: &Key, expired_key: &Key) {
             stream.write_all(response.as_bytes()).unwrap();
         }
         ("POST", "/auth") => {
-            let auth_key = if query == Some("expired=true") {
-                expired_key
+            let key_type = if query == Some("expired=true") {
+                db::KeyType::Expired
             } else {
-                key
+                db::KeyType::Valid
             };
+            let auth_key = db::get_key(
+                db,
+                key_type,
+                now
+            ).expect("Failed to retrieve key");
             let encoded_header = to_base64(
-                &jwt_create_header(auth_key)
+                &jwt_create_header(&auth_key)
             );
             let encoded_payload = to_base64(
-                &jwt_create_payload(auth_key)
+                &jwt_create_payload(&auth_key)
             );
             let header_and_payload = format!(
                 "{}.{}",

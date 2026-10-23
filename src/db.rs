@@ -1,8 +1,12 @@
 use rusqlite::{
     Connection,
-    Result
+    Result,
+    Row
 };
-use crate::db::KeyType::{Expired, Valid};
+use crate::db::KeyType::{
+    Expired,
+    Valid
+};
 use crate::key::Key;
 
 pub fn init_db() -> Result<Connection> {
@@ -35,6 +39,17 @@ pub enum KeyType{
     Expired
 }
 
+pub fn map_key(row: &Row) -> Result<Key> {
+    let kid: i64 = row.get(0)?;
+    let pem: String = row.get(1)?;
+    let exp: i64 = row.get(2)?;
+    return Ok(Key::from_pem(
+        kid.to_string(),
+        exp as u64,
+        &pem,
+    ))
+}
+
 pub fn get_key(connection: &Connection, key_type: KeyType, now: u64) -> Result<Key> {
     let mut statement = if key_type == Valid {
         connection.prepare(
@@ -53,16 +68,20 @@ pub fn get_key(connection: &Connection, key_type: KeyType, now: u64) -> Result<K
     };
     let key = statement.query_row(
         [now as i64],
-        |row| {
-            let kid: i64 = row.get(0)?;
-            let pem: String = row.get(1)?;
-            let exp: i64 = row.get(2)?;
-            Ok(Key::from_pem(
-                kid.to_string(),
-                exp as u64,
-                &pem,
-            ))
-        },
+        |row| map_key(&row),
     )?;
     return Ok(key);
+}
+
+pub fn get_valid_key_set(connection: &Connection, current: u64) -> Result<Vec<Key>> {
+    let mut statement = connection.prepare(
+        "SELECT kid, key, exp
+         FROM keys
+         WHERE exp > ?1"
+    )?;
+    let keys = statement.query_map(
+        [current as i64],
+        |row| map_key(&row),
+    )?;
+    return keys.collect()
 }
