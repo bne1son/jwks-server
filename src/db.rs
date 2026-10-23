@@ -2,6 +2,7 @@ use rusqlite::{
     Connection,
     Result
 };
+use crate::db::KeyType::{Expired, Valid};
 use crate::key::Key;
 
 pub fn init_db() -> Result<Connection> {
@@ -28,15 +29,30 @@ pub fn insert_key(connection: &Connection, key: &Key) -> Result<()> {
     return Ok(());
 }
 
-pub fn get_key(connection: &Connection, current_time: u64) -> Result<Key> {
-    let mut statement = connection.prepare(
-        "SELECT kid, key, exp
-         FROM keys
-         WHERE exp > ?1
-         LIMIT 1"
-    )?;
+#[derive(PartialEq)]
+pub enum KeyType{
+    Valid,
+    Expired
+}
+
+pub fn get_key(connection: &Connection, key_type: KeyType, now: u64) -> Result<Key> {
+    let mut statement = if key_type == Valid {
+        connection.prepare(
+            "SELECT kid, key, exp
+             FROM keys
+             WHERE exp > ?1
+             LIMIT 1"
+        )?
+    } else {
+        connection.prepare(
+            "SELECT kid, key, exp
+             FROM keys
+             WHERE exp <= ?1
+             LIMIT 1"
+        )?
+    };
     let key = statement.query_row(
-        [current_time as i64],
+        [now as i64],
         |row| {
             let kid: i64 = row.get(0)?;
             let pem: String = row.get(1)?;
@@ -44,9 +60,9 @@ pub fn get_key(connection: &Connection, current_time: u64) -> Result<Key> {
             Ok(Key::from_pem(
                 kid.to_string(),
                 exp as u64,
-                &pem
+                &pem,
             ))
-        }
+        },
     )?;
     return Ok(key);
 }

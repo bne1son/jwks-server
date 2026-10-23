@@ -40,7 +40,21 @@ fn main() {
         .expect("Failed to insert unexpired key");
     db::insert_key(&_database, &sample_expired_key)
         .expect("Failed to insert expired key");
-    
+
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+
+                    let expired_loaded_key = db::get_key(&_database, db::KeyType::Expired, now)
+                        .expect("Failed to retrieve valid key");
+
+                    println!(
+                        "Expired loaded key: kid={}, exp={}",
+                        expired_loaded_key.kid(),
+                        expired_loaded_key.expires_at()
+                    );
+
     let socket = TcpListener::bind("127.0.0.1:8080");
     // listen on 127.0.0.1:8080
     for stream in socket.unwrap().incoming() {
